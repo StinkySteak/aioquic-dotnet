@@ -22,6 +22,7 @@ BIND_PORT = 4433
 
 ipcSocket = None
 Http3 = None
+wtransportProtocol = None
 
 class NetickHandler:
 
@@ -62,9 +63,8 @@ class WebTransportProtocol(QuicConnectionProtocol):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-
-    def echo():
-        print("Echo")
+        global wtransportProtocol
+        wtransportProtocol = self
 
     def quic_event_received(self, event: QuicEvent) -> None:
         if isinstance(event, ProtocolNegotiated):
@@ -193,6 +193,8 @@ def ipc_receive_loop(sock):
             Log(f"Trying to forward dotNET message using {Http3} body: {body}")
             payload = str(len(body)).encode('ascii')
             Http3.send_datagram(connectionId, payload)
+            Log(f"wtransport: {wtransportProtocol}")
+            wtransportProtocol.transmit()
             Log(f"Datagram sent!")
         else:
             Log(f"Message header invalid!")

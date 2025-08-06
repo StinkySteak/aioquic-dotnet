@@ -176,7 +176,7 @@ namespace WTransportLink
             {
                 Log($"Sending Message of empty bytes of array to: {connectionId}");
 
-                byte[] random = new byte[32];
+                byte[] random = new byte[512];
 
                 for (int i = 0; i < 1; i++)
                 {
