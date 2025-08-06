@@ -159,21 +159,32 @@ namespace WTransportLink
                     byte[] buffer = new byte[20248];
                     int length = _wtransportIPCSocket.Client.Receive(buffer);
 
-                    Log($"Message received, length: {length}");
+                    Log($"Message received (1), length: {length}");
                     string json = Encoding.UTF8.GetString(buffer, 0, length);
 
                     IPCWTransportMessageClientConnected message = JsonConvert.DeserializeObject<IPCWTransportMessageClientConnected>(json);
 
-                    Log($"message: {json}");
+                    Log($"Message received (2) {json}");
 
                     _connectionIds.Add(message.ConnectionId);
 
-                    byte[] random = new byte[500];
-                    Send(message.ConnectionId, random);
+                    AutoSendOnConnectEstablished(message.ConnectionId);
                 }
             }
 
-            private void Send(int connectionId, byte[] body)
+            private void AutoSendOnConnectEstablished(int connectionId)
+            {
+                Log($"Sending Message of empty bytes of array to: {connectionId}");
+
+                byte[] random = new byte[32];
+
+                for (int i = 0; i < 1; i++)
+                {
+                    SendToPeer(connectionId, random);
+                }
+            }
+
+            private void SendToPeer(int connectionId, byte[] body)
             {
                 IPCWTransportMessageSend message = new();
                 message.Header = Header.Send;

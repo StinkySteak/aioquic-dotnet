@@ -31,21 +31,13 @@ class NetickHandler:
         self._counters = defaultdict(int)
         global Http3
         Http3 = http
-        Log(f"Http3: {Http3}")
-        Log(f"http: {http}")
 
     def h3_event_received(self, event: H3Event) -> None:
         if isinstance(event, DatagramReceived):
             payload = str(len(event.data)).encode('ascii')
+            Log(f"Received message wtransport client: {payload} sessionId: {self._session_id}")
             self._http.send_datagram(self._session_id, payload)
-            Log(f"payload: {payload} sessionId: {self._session_id}")
-
-            json_str = json.dumps(message)
-            data = json_str.encode('utf-8')
-
-            ipcSocket.send(data)
-            Log(f"Sending IPC of 'connectionEstablishment' to C# app")
-
+            Log(f"Datagram replied!")
 
         if isinstance(event, WebTransportStreamDataReceived):
             self._counters[event.stream_id] += len(event.data)
@@ -118,8 +110,13 @@ class WebTransportProtocol(QuicConnectionProtocol):
             print(f"a connection is established connectionid: {stream_id}")
             message = {
                 "Header": 4,
-                "ConnectionId": self._session_id
+                "ConnectionId": stream_id
             }
+            json_str = json.dumps(message)
+            data = json_str.encode('utf-8')
+
+            ipcSocket.send(data)
+            Log(f"Sending IPC of 'connectionEstablishment' to dotNET")
         else:
             self._send_response(stream_id, 404, end_stream=True)
 
@@ -177,26 +174,28 @@ def startWebTransportBeThread():
     startWebTransport()
 
 def ipc_receive_loop(sock):
-    try:
-        while True:
-            Log(f"socket receiving...")
-            data = sock.recv(1024)
-            Log(f"Received response {data}")
-            json_str = data.decode('utf-8')
-            message = json.loads(json_str)
+    while True:
+        Log(f"Socket receiving...")
+        data = sock.recv(1024)
+        Log(f"Received response {data}")
+        json_str = data.decode('utf-8')
+        message = json.loads(json_str)
+        Log(f"message {message}")
 
-            if message["Header"] == Header.StartWebTransport:
-                Log("Starting web transport...")
-                threading.Thread(target=startWebTransportBeThread).start()
-            if message["Header"] == Header.StopWebTransport:
-                Log("Stopping web transport...")
-            if message["Header"] == Header.Send:
-                Log(f"Trying to forward dotNET message using {Http3}")
-                connectionId = message["ConnectionId"]
-                body = message["Body"]
-                Http3.send_datagram(connectionId, body)
-    except Exception:
-        pass
+        if message["Header"] == Header.StartWebTransport:
+            Log("Starting web transport...")
+            threading.Thread(target=startWebTransportBeThread).start()
+        elif message["Header"] == Header.StopWebTransport:
+            Log("Stopping web transport...")
+        elif message["Header"] == Header.Send:
+            connectionId = message["ConnectionId"]
+            body = message["Body"]
+            Log(f"Trying to forward dotNET message using {Http3} body: {body}")
+            payload = str(len(body)).encode('ascii')
+            Http3.send_datagram(connectionId, payload)
+            Log(f"Datagram sent!")
+        else:
+            Log(f"Message header invalid!")
 
 
 if __name__ == '__main__':
