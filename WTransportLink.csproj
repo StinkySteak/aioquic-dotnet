@@ -18,6 +18,9 @@
     <None Update="certificate.pem">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="pingpong.py">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Update="index.py">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

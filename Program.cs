@@ -98,18 +98,23 @@ namespace WTransportLink
             private List<int> _connectionIds = new();
             private Thread _threadReceive;
 
+            private static void Log(object message)
+            {
+                Console.WriteLine($"[.NET]: {message}");
+            }
+
             public void Init()
             {
                 _tcpListener = new TcpListener(IPAddress.Loopback, _listenPort);
                 _tcpListener.Start();
-                Console.WriteLine($"Tcp is listening at: {_listenPort}");
+                Log($"Tcp is listening at: {_listenPort}");
             }
 
             public void StartWTransport()
             {
                 if (!_isIPCEstablished)
                 {
-                    Console.WriteLine($"No IPCWTranport client is connected");
+                    Log($"No IPCWTranport client is connected");
                     return;
                 }
 
@@ -129,7 +134,7 @@ namespace WTransportLink
             {
                 if (!_isIPCEstablished)
                 {
-                    Console.WriteLine($"No IPCWTranport client is connected");
+                    Log($"No IPCWTranport client is connected");
                     return;
                 }
 
@@ -146,7 +151,6 @@ namespace WTransportLink
             {
                 while (true)
                 {
-                    continue;
                     if (!_isIPCEstablished)
                     {
                         continue;
@@ -155,11 +159,12 @@ namespace WTransportLink
                     byte[] buffer = new byte[20248];
                     int length = _wtransportIPCSocket.Client.Receive(buffer);
 
+                    Log($"Message received, length: {length}");
                     string json = Encoding.UTF8.GetString(buffer, 0, length);
 
                     IPCWTransportMessageClientConnected message = JsonConvert.DeserializeObject<IPCWTransportMessageClientConnected>(json);
 
-                    Console.WriteLine($"Message received!: {json}");
+                    Log($"message: {json}");
 
                     _connectionIds.Add(message.ConnectionId);
 
@@ -178,13 +183,13 @@ namespace WTransportLink
                 string json = JsonConvert.SerializeObject(message);
                 byte[] bytes = Encoding.UTF8.GetBytes(json);
 
-                Console.WriteLine($"Sending netick packet...");
+                Log($"Sending netick packet...");
                 _wtransportIPCSocket.Client.Send(bytes);
             }
 
             public void PollUpdate()
             {
-                Console.WriteLine($"Poll Update...");
+                Log($"Poll Update...");
                 _wtransportIPCSocket = _tcpListener.AcceptTcpClient();
                 _isIPCEstablished = true;
             }

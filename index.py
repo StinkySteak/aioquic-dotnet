@@ -4,6 +4,7 @@ import json
 import argparse
 import asyncio
 import threading
+import time
 
 import logging
 from collections import defaultdict
@@ -28,25 +29,22 @@ class NetickHandler:
         self._session_id = session_id
         self._http = http
         self._counters = defaultdict(int)
+        global Http3
         Http3 = http
+        Log(f"Http3: {Http3}")
+        Log(f"http: {http}")
 
     def h3_event_received(self, event: H3Event) -> None:
         if isinstance(event, DatagramReceived):
             payload = str(len(event.data)).encode('ascii')
             self._http.send_datagram(self._session_id, payload)
-            print(f"Replying {payload}")
-
-
-            message = {
-                "Header": 4,
-                "ConnectionId": self._session_id
-            }
+            Log(f"payload: {payload} sessionId: {self._session_id}")
 
             json_str = json.dumps(message)
             data = json_str.encode('utf-8')
 
             ipcSocket.send(data)
-            print(f"Sending IPC to C# app")
+            Log(f"Sending IPC of 'connectionEstablishment' to C# app")
 
 
         if isinstance(event, WebTransportStreamDataReceived):
@@ -118,6 +116,10 @@ class WebTransportProtocol(QuicConnectionProtocol):
             self._handler = NetickHandler(stream_id, self._http)
             self._send_response(stream_id, 200)
             print(f"a connection is established connectionid: {stream_id}")
+            message = {
+                "Header": 4,
+                "ConnectionId": self._session_id
+            }
         else:
             self._send_response(stream_id, 404, end_stream=True)
 
@@ -145,7 +147,8 @@ def startWebTransport():
     )
     configuration.load_cert_chain(args.certificate, args.key)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     loop.run_until_complete(
         serve(
             BIND_ADDRESS,
@@ -155,10 +158,13 @@ def startWebTransport():
         ))
     try:
         logging.info(
-            print(f"Listening on https://{BIND_ADDRESS}:{BIND_PORT}"))
+            Log(f"Listening on https://{BIND_ADDRESS}:{BIND_PORT}"))
         loop.run_forever()
     except KeyboardInterrupt:
         pass
+
+def Log(message):
+    print(f"[Py]: {message}");
 
 class Header(IntEnum):
     StartWebTransport = 1
@@ -166,29 +172,31 @@ class Header(IntEnum):
     Send = 3
     OnConnectionEstablished = 4
 
+def startWebTransportBeThread():
+    Log("starting webtransport (2)")
+    startWebTransport()
+
 def ipc_receive_loop(sock):
-    print("[PY] Running IPC Receive Loop")
+    try:
+        while True:
+            Log(f"socket receiving...")
+            data = sock.recv(1024)
+            Log(f"Received response {data}")
+            json_str = data.decode('utf-8')
+            message = json.loads(json_str)
 
-    # sock.settimeout(1.0)
-
-    while True:
-
-        print("[PY] Receiving...")
-        print(f"[PY] sock: {sock}")
-        data = sock.recv(1024)
-        print(f"[PY] Received response {data}")
-        json_str = data.decode('utf-8')
-        message = json.loads(json_str)
-
-        if message["Header"] == Header.StartWebTransport:
-            print("Starting web transport...")
-        ##    threading.Thread(target=startWebTransport, daemon=True).start()
-        if message["Header"] == Header.StopWebTransport:
-            print("Stopping web transport...")
-        if message["Header"] == Header.Send:
-            connectionId = message["ConnectionId"]
-            body = message["Body"]
-            Http3.send_datagram(connectionId, body)
+            if message["Header"] == Header.StartWebTransport:
+                Log("Starting web transport...")
+                threading.Thread(target=startWebTransportBeThread).start()
+            if message["Header"] == Header.StopWebTransport:
+                Log("Stopping web transport...")
+            if message["Header"] == Header.Send:
+                Log(f"Trying to forward dotNET message using {Http3}")
+                connectionId = message["ConnectionId"]
+                body = message["Body"]
+                Http3.send_datagram(connectionId, body)
+    except Exception:
+        pass
 
 
 if __name__ == '__main__':
@@ -198,7 +206,8 @@ if __name__ == '__main__':
     
     with socket.create_connection((host, port)) as sock:
         ipcSocket = sock
-        print("[PY] Connected to Unity server")
-        threading.Thread(target=ipc_receive_loop, args=(sock,), daemon=True).start()
+        Log("[PY] Connected to Unity server")
+        threading.Thread(target=ipc_receive_loop, args=(sock,)).start()
 
-        print("[PY] Bypass")
+        while True:
+            time.sleep(1)
